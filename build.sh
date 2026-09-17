@@ -3,32 +3,36 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 
-HARNESS_ROOT="$PROJECT_DIR/../deepseek-harness"
-SVG="$HARNESS_ROOT/apps/web/public/favicon.svg"
+HARNESS_ROOT="$(cd "$PROJECT_DIR/../deepseek-harness" && pwd)"
+SVG="$PROJECT_DIR/icon.svg"
 APP_DIR="bin/DeepSeek Harness.app"
 ICONSET="bin/icon.iconset"
 ICNS="bin/icon.icns"
 
 echo "=== 1/3: Building Go binary ==="
-go build -o bin/deepseek-harness-desktop .
+go build -ldflags="-X 'main.harnessPath=$HARNESS_ROOT'" -o bin/deepseek-harness-desktop .
+echo "  -> harness path baked in: $HARNESS_ROOT"
 
 echo "=== 2/3: Generating app icon ==="
 rm -rf "$ICONSET" "$ICNS"
 mkdir -p "$ICONSET"
 
-# Render SVG to 1024x1024 PNG
+# Render SVG to 1024x1024 PNG with dark background for visibility.
+# The favicon SVG uses @media (prefers-color-scheme: dark) so on a
+# dark-background system it renders as white — perfect for the app.
 qlmanage -t -s 1024 -o "$ICONSET" "$SVG" 2>/dev/null || {
-  echo "ERROR: qlmanage failed. Trying sips fallback..."
-  # Create a minimal placeholder PNG via sips (won't look great but won't crash)
-  sips -z 1024 1024 -c 1024 1024 --setProperty format png /System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericApplicationIcon.icns --out "$ICONSET/favicon.svg.png" 2>/dev/null || {
-    echo "ERROR: Could not generate icon. Install librsvg: brew install librsvg"
-    exit 1
-  }
+  echo "ERROR: qlmanage failed to render SVG."
+  echo "Install librsvg and re-run: brew install librsvg"
+  exit 1
 }
 
 SRC="$ICONSET/favicon.svg.png"
+if [ ! -f "$SRC" ]; then
+  echo "ERROR: qlmanage did not produce output."
+  exit 1
+fi
 
-# Generate all required sizes
+# Generate all required sizes for the iconset.
 sips -z 16 16   "$SRC" --out "$ICONSET/icon_16x16.png"       2>/dev/null
 sips -z 32 32   "$SRC" --out "$ICONSET/icon_16x16@2x.png"    2>/dev/null
 sips -z 32 32   "$SRC" --out "$ICONSET/icon_32x32.png"       2>/dev/null
@@ -85,5 +89,10 @@ PLIST
 
 echo ""
 echo "Done: $APP_DIR"
-echo "To install: cp -R '$APP_DIR' /Applications/"
-echo "To run:     open '$APP_DIR'"
+echo ""
+echo "To run in place:"
+echo "  open '$APP_DIR'"
+echo ""
+echo "To install in /Applications:"
+echo "  cp -R '$APP_DIR' /Applications/"
+echo "  open '/Applications/DeepSeek Harness.app'"
