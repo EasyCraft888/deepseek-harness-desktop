@@ -3,7 +3,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
 
-HARNESS_ROOT="$(cd "$PROJECT_DIR/../deepseek-harness" && pwd)"
+HARNESS_ROOT="${HARNESS_ROOT:-$(cd "$PROJECT_DIR/../deepseek-harness" 2>/dev/null && pwd)}"
+if [ -z "$HARNESS_ROOT" ]; then
+  echo "ERROR: could not find ../deepseek-harness."
+  echo "  Set HARNESS_ROOT=/path/to/deepseek-harness or symlink the checkout at ../deepseek-harness"
+  exit 1
+fi
 SVG="$PROJECT_DIR/icon.svg"
 APP_DIR="bin/DeepSeek Harness.app"
 ICONSET="bin/icon.iconset"
@@ -18,17 +23,16 @@ rm -rf "$ICONSET" "$ICNS"
 mkdir -p "$ICONSET"
 
 # Render SVG to 1024x1024 PNG with dark background for visibility.
-# The favicon SVG uses @media (prefers-color-scheme: dark) so on a
-# dark-background system it renders as white — perfect for the app.
 qlmanage -t -s 1024 -o "$ICONSET" "$SVG" 2>/dev/null || {
   echo "ERROR: qlmanage failed to render SVG."
   echo "Install librsvg and re-run: brew install librsvg"
   exit 1
 }
 
-SRC="$ICONSET/favicon.svg.png"
+# Derive the output filename from the SVG basename (qlmanage names output after the input).
+SRC="$ICONSET/$(basename "$SVG").png"
 if [ ! -f "$SRC" ]; then
-  echo "ERROR: qlmanage did not produce output."
+  echo "ERROR: qlmanage did not produce output at $SRC."
   exit 1
 fi
 
@@ -66,7 +70,7 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
 	<key>CFBundleIconFile</key>
 	<string>icon</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.deepseek.harness</string>
+	<string>dev.easycraft.deepseek-harness-desktop</string>
 	<key>CFBundleName</key>
 	<string>DeepSeek Harness</string>
 	<key>CFBundleDisplayName</key>
@@ -83,6 +87,11 @@ cat > "$APP_DIR/Contents/Info.plist" << 'PLIST'
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
 PLIST
